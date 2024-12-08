@@ -1,0 +1,28 @@
+const fetch = require('node-fetch');
+const Playstore = {
+    async fetchApps(query) {
+        try {
+            const response = await fetch(`https://play.google.com/store/search?q=${encodeURIComponent(query)}&c=apps&hl=id`);
+            const text = await response.text();
+            const apps = parseAppsFromHTML(text); // You need to implement this function to parse the HTML response.
+
+            return {
+                creator: 'Indraa Furina',
+                status: true,
+                apps: apps
+            };
+        } catch (error) {
+            return { error: true, message: error.message };
+        }
+    },
+    async exampleUsage(username) {
+        const igData = await iGstalk(username);
+        console.log(igData);
+    },
+    async examplePlayStoreUsage() {
+        const appData = await this.fetchApps('Ff');
+        console.log(appData);
+    }
+};
+
+module.exports = { Playstore };

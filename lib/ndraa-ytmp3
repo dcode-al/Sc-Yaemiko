@@ -1,0 +1,87 @@
+const { RetaTube } = require('../lib/mediaa'); // Ganti dengan path yang sesuai ke file RetaTube
+const fs = require('fs');
+const axios = require('axios');
+const path = require('path');
+const os = require('os');
+const moment = require('moment');
+
+let handler = async (m, { conn, text, usedPrefix, command }) => {
+  if (!text) {
+    return conn.reply(m.chat, `• *Example :* ${usedPrefix}${command} https://www.retataube.com/xxxxxxx`, m);
+  }
+
+  conn.sendMessage(m.chat, { react: { text: '🕒', key: m.key } });
+
+  const retatube = new RetaTube();
+  
+  try {
+    const json = await retatube.scrape(text);
+
+    if (!json || !json.downloadLinks || !Array.isArray(json.downloadLinks)) {
+      return m.reply('Unable to retrieve download links. The response format is invalid.');
+    }
+
+    const { title, downloadLinks } = json;
+    if (downloadLinks.length === 0) {
+      return m.reply('No download links found. Please check the video link.');
+    }
+
+    const fileUrl = downloadLinks[0].url; // Ambil URL dari download link pertama
+    const fileName = `${title.replace(/[\/\\?%*:|"<>]/g, '_')}.mp4`; // Ganti ekstensi jika perlu
+    const filePath = path.join(os.tmpdir(), fileName);
+
+    const response = await axios({
+      method: 'GET',
+      url: fileUrl,
+      responseType: 'stream'
+    });
+
+    const writer = fs.createWriteStream(filePath);
+    response.data.pipe(writer);
+
+    await new Promise((resolve, reject) => {
+      writer.on('finish', resolve);
+      writer.on('error', reject);
+    });
+
+    const buffer = fs.readFileSync(filePath);
+
+    const contextInfo = {
+      mentionedJid: [],
+      externalAdReply: {
+        title: title,
+        body: 'Powered By : YourBotName',
+        thumbnailUrl: '', // Tambahkan thumbnail jika tersedia
+        sourceUrl: text,
+        mediaType: 2, // Menggunakan mediaType 2 untuk video, 1 untuk audio
+        renderLargerThumbnail: true
+      },
+      isForwarded: true,
+      forwardingScore: 999,
+      forwardedNewsletterMessageInfo: {
+        newsletterJid: '120363290835103806@newsletter',
+        newsletterName: 'Powered By : YourBotName',
+        serverMessageId: -1
+      }
+    };
+
+    await conn.sendFile(m.chat, buffer, fileName, `*Title:* ${title}`, m, false, { contextInfo });
+
+    fs.unlink(filePath, (err) => {
+      if (err) {
+        console.error(`Failed to delete file: ${err}`);
+      } else {
+        console.log(`Deleted file: ${filePath}`);
+      }
+    });
+  } catch (e) {
+    console.error('Error occurred:', e);
+    m.reply(`An error occurred: ${e.message}`);
+  }
+};
+
+handler.help = ['reta *<url>*'];
+handler.tags = ['downloader'];
+handler.command = ['reta'];
+
+module.exports = handler;
